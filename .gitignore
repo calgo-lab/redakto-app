@@ -1,4 +1,5 @@
 models/
+!models/.gitkeep
 flair_cache_root/
+!flair_cache_root/.gitkeep
 .devcontainer/
-
