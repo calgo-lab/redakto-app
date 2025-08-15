@@ -62,7 +62,7 @@ class ModelLoader:
         
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
-        device_stat = "CPU" if device == "cpu" else torch.cuda.get_device_name(0)
+        device_stat = "CPU" if device.type == "cpu" else torch.cuda.get_device_name(0)
         print(f"device_stat: {device_stat}")
         
         tokenized_outputs = self.codealltag_mT5_tokenizer.batch_encode_plus(
