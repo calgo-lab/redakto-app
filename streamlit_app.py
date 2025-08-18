@@ -11,7 +11,7 @@ CODEALLTAG_LABELS = ["CITY", "DATE", "EMAIL", "FAMILY", "FEMALE", "MALE", "ORG",
                      "PHONE", "STREET", "STREETNO", "UFID", "URL", "USER", 
                      "ZIP"]
 
-LER_LABELS = ["CITY", "DATE", "EMAIL", "FAMILY", "FEMALE", "MALE", "ORG"]
+GERMAN_LER_LABELS = ["CITY", "DATE", "EMAIL", "FAMILY", "FEMALE", "MALE", "ORG"]
 
 # Example texts to choose from
 example_texts = [
@@ -40,7 +40,7 @@ st.set_page_config(page_title="Redakto", page_icon="favicon.ico")
 if "entity_set_id" not in st.session_state:
     st.session_state["entity_set_id"] = "codealltag"
 if "model_id" not in st.session_state:
-    st.session_state["model_id"] = "mt5"
+    st.session_state["model_id"] = "google-mt5-base"
 if "repeat" not in st.session_state:
     st.session_state["repeat"] = 1
 if "processed_data" not in st.session_state:
@@ -181,16 +181,16 @@ def update_entity_set_id():
 # Entity Set selector
 entity_set = st.radio(
     "Entity Set:",
-    options=["codealltag", "ler"],
-    index=["codealltag", "ler"].index(st.session_state["entity_set_id"]),
+    options=["codealltag", "german-ler"],
+    index=["codealltag", "german-ler"].index(st.session_state["entity_set_id"]),
     format_func=lambda x: {
         "codealltag": "Email/CodEAlltag",
-        "ler": "Legal/LER"
+        "german-ler": "Legal/German-LER"
     }[x],
     disabled=1,
     horizontal=True,
     key="entity_set_radio",
-    on_change=update_entity_set_id,
+    on_change=update_entity_set_id
 )
 
 def update_model_id():
@@ -198,23 +198,20 @@ def update_model_id():
     st.session_state["processed_data"] = None
 
 codealltag_supported_models = {
-    "bilstmcrf": "A/BiLSTM-CRF",
-    "gelectra": "A/GELECTRA",
-    "mt5": "P/mT5"
+    "bilstm-crf-plus": "NER.BiLSTM-CRF(+)",
+    "deepset-gelectra-large": "NER.deepset/gelectra-large",
+    "google-mt5-base": "NER-PG.google/mt5-base"
 }
 
-ler_supported_models = {
-    "bilstmcrf": "A/BiLSTM-CRF",
-    "gbert": "A/GermanBERT",
-    "xlm-roberta": "A/XLM-RoBERTa",
-    "gelectra": "A/GELECTRA"
+german_ler_supported_models = {
+    "deepset-gelectra-large": "NER.deepset/gelectra-large"
 }
 
 def get_supported_models(entity_set_id):
     if entity_set_id == "codealltag":
         return codealltag_supported_models
-    elif entity_set_id == "ler":
-        return ler_supported_models
+    elif entity_set_id == "german-ler":
+        return german_ler_supported_models
     else:
         return {}
 
@@ -238,8 +235,8 @@ def generate_label_legends(labels):
 
 if st.session_state["entity_set_id"] == "codealltag":
     label_legends = generate_label_legends(CODEALLTAG_LABELS)
-elif st.session_state["entity_set_id"] == "ler":
-    label_legends = generate_label_legends(LER_LABELS)
+elif st.session_state["entity_set_id"] == "german-ler":
+    label_legends = generate_label_legends(GERMAN_LER_LABELS)
 
 st.markdown(
     f'<div class="decorated-output-div">{label_legends}</div>',
@@ -261,7 +258,7 @@ def update_repeat():
     st.session_state["repeat"] = st.session_state.get("repeat_slider", 1)
 
 # Repeat slider
-if st.session_state["entity_set_id"] == "codealltag" and st.session_state["model_id"] == "mt5":
+if st.session_state["entity_set_id"] == "codealltag" and st.session_state["model_id"] == "google-mt5-base":
     st.slider(
         "Repeat:",
         min_value=1,
@@ -307,7 +304,7 @@ if st.button("Process"):
 # Display processed output
 if st.session_state["processed_data"]:
 
-    output_header = "Pseudonymized Outputs" if st.session_state["model_id"] == "mt5" else f"Annotated Output"
+    output_header = "Pseudonymized Outputs" if st.session_state["model_id"] == "google-mt5-base" else f"Annotated Output"
     st.subheader(output_header)
 
     # API supports multiple text as a list, we process only one text through UI

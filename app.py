@@ -1,10 +1,15 @@
 from flair.data import Sentence
 from fastapi import FastAPI, HTTPException
-from model_loader import ModelLoader
+from src.infrastructure.frameworks.flair_tagger_loader import FlairTaggerLoader
+from src.infrastructure.frameworks.mtfive_loader import MT5Loader
 from pandas import DataFrame
 from pydantic import BaseModel
 from somajo import SoMaJo
 from typing import List, Dict, Any
+
+from contextlib import asynccontextmanager
+from src.infrastructure.frameworks.setup_frameworks_env import setup_environment
+from src.infrastructure.model_loading.model_service import ModelService
 
 import logging
 import pandas as pd
@@ -19,17 +24,20 @@ import uvicorn
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI app
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    setup_environment()
+    app.state.model_service = ModelService()
+    yield
 
-# Get the preloaded model instance
-model_loader = ModelLoader.get_instance()
+# Initialize FastAPI app
+app = FastAPI(lifespan=lifespan)
 
 labels = ['CITY', 'DATE', 'EMAIL', 'FAMILY', 'FEMALE', 'MALE', 'ORG', 
           'PHONE', 'STREET', 'STREETNO', 'UFID', 'URL', 'USER', 'ZIP']
 
 supported_entity_set_model_dict = {
-    "codealltag": ["bilstmcrf", "gelectra", "mt5"]
+    "codealltag": ["bilstm-crf-plus", "deepset-gelectra-large", "google-mt5-base"]
 }
 
 # Define input schema
@@ -136,8 +144,9 @@ def get_annotation_df_with_flair_tagger(input_text: str, tagger_id: str) -> Data
     
     email_content = input_text
     sentences = _get_somajo_tokenized_sentences(input_text)
+    tagger = app.state.model_service.get_model('codealltag', tagger_id)
 
-    sentences = model_loader.predict_with_codealltag_tagger(tagger_id, sentences)
+    sentences = FlairTaggerLoader.predict(tagger, sentences)
 
     email_content_length = len(email_content)
     email_content_copy = email_content[0:email_content_length]
@@ -187,10 +196,16 @@ def get_annotation_df_with_flair_tagger(input_text: str, tagger_id: str) -> Data
     )
 
 def _process_for_codealltag_mT5(input_data, output):
+    model, tokenizer = app.state.model_service.get_model(input_data.entity_set_id, input_data.model_id)
+    print(f"model: {model}, tokenizer: {tokenizer}")
     for input_text in input_data.input_texts:
         per_text_output: List[DataItem] = list()
         for repeat_count in range(0, input_data.repeat):
-            predicted_text = model_loader.predict_with_codealltag_mT5(input_text)
+            predicted_text = MT5Loader.generate(
+                model=model,
+                tokenizer=tokenizer,
+                input_text=input_text
+            )
             print(predicted_text)
             output_df = get_annotation_df_with_input_text_and_predicted_text(input_text, predicted_text, labels)
             output_text = get_pseudonymized_text(input_text, output_df)
@@ -201,7 +216,7 @@ def _process_for_codealltag_mT5(input_data, output):
     return output
 
 def _process_for_codealltag_tagger(input_data, output):
-    tagger_id = input_data.entity_set_id + '_' + input_data.model_id
+    tagger_id = input_data.model_id
     for input_text in input_data.input_texts:
         per_text_output: List[DataItem] = list()
         output_df = get_annotation_df_with_flair_tagger(input_text, tagger_id)
@@ -213,7 +228,7 @@ def _process_for_codealltag_tagger(input_data, output):
 
 def _process_for_entity_set_and_model(input_data, output):
     if input_data.entity_set_id == 'codealltag':
-        if input_data.model_id == 'mt5':
+        if input_data.model_id == 'google-mt5-base':
             output = _process_for_codealltag_mT5(input_data, output)
         else:
             output = _process_for_codealltag_tagger(input_data, output)
@@ -222,9 +237,7 @@ def _process_for_entity_set_and_model(input_data, output):
 
 @app.post("/predict", response_model=ApiResponse)
 def predict(input_data: ApiRequest):
-    
     output: List[List[DataItem]] = list()
-    
     try:
         if not input_data.entity_set_id or input_data.entity_set_id not in supported_entity_set_model_dict.keys():
             msg: str = f'Invalid entity_set_id={input_data.entity_set_id}, supported values: {list(supported_entity_set_model_dict.keys())}'

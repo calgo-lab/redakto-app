@@ -19,10 +19,11 @@ COPY models/ /app/models/
 
 COPY flair_cache_root/ /app/flair_cache_root/
 
-COPY app.py model_loader.py preload_model.py streamlit_app.py favicon.ico logo.png app_info.json ./
+COPY app.py model_loader.py preload_model.py streamlit_app.py favicon.ico logo.png ./
 
-COPY utils/ /app/utils/
+COPY config/ /app/config/
+COPY src/ /app/src/
 
 EXPOSE 8000 8501
 
-CMD ["sh", "-c", "python preload_model.py && uvicorn app:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port 8000"]
