@@ -1,24 +1,19 @@
-from flair.data import Sentence
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
-from src.infrastructure.frameworks.flair_tagger_loader import FlairTaggerLoader
-from src.infrastructure.frameworks.mtfive_loader import MT5Loader
+from flair.data import Sentence
 from pandas import DataFrame
 from pydantic import BaseModel
 from somajo import SoMaJo
-from typing import List, Dict, Any
-
-from contextlib import asynccontextmanager
-from src.infrastructure.frameworks.setup_frameworks_env import setup_environment
+from src.infrastructure.frameworks import FlairTaggerLoader, MT5Loader
 from src.infrastructure.model_loading.model_service import ModelService
+from typing import Any, Dict, List
 
 import logging
 import pandas as pd
 import re
 import subprocess
 import threading
-import torch
 import uvicorn
-
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
@@ -26,7 +21,6 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    setup_environment()
     app.state.model_service = ModelService()
     yield
 
@@ -197,20 +191,32 @@ def get_annotation_df_with_flair_tagger(input_text: str, tagger_id: str) -> Data
 
 def _process_for_codealltag_mT5(input_data, output):
     model, tokenizer = app.state.model_service.get_model(input_data.entity_set_id, input_data.model_id)
-    print(f"model: {model}, tokenizer: {tokenizer}")
     for input_text in input_data.input_texts:
         per_text_output: List[DataItem] = list()
+        tokenized_inputs = MT5Loader.tokenize_text(tokenizer, 
+                                                   input_text, 
+                                                   max_length=512, 
+                                                   padding="max_length", 
+                                                   truncation=True)
+        
         for repeat_count in range(0, input_data.repeat):
             predicted_text = MT5Loader.generate(
-                model=model,
-                tokenizer=tokenizer,
-                input_text=input_text
+                model=model, 
+                tokenizer=tokenizer, 
+                tokenized_inputs=tokenized_inputs, 
+                max_length=512, 
+                temperature=0.8, 
+                do_sample=True, 
+                top_k=100
             )
+
             print(predicted_text)
+            
             output_df = get_annotation_df_with_input_text_and_predicted_text(input_text, predicted_text, labels)
             output_text = get_pseudonymized_text(input_text, output_df)
             data_item = DataItem(output_dict=output_df.to_dict(), output_text=output_text)
             per_text_output.append(data_item)
+
         output.append(per_text_output)
     
     return output

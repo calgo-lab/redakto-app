@@ -14,15 +14,18 @@ RUN pip install numpy==1.24.4 pandas==1.5.3 && rm -rf /root/.cache/pip
 RUN mkdir -p \
     flair_cache_root \
 	models
+    
+COPY flair_cache_root/ /app/flair_cache_root/
 
 COPY models/ /app/models/
-
-COPY flair_cache_root/ /app/flair_cache_root/
 
 COPY app.py model_loader.py preload_model.py streamlit_app.py favicon.ico logo.png ./
 
 COPY config/ /app/config/
+
 COPY src/ /app/src/
+
+ENV TOKENIZERS_PARALLELISM=false
 
 EXPOSE 8000 8501
 

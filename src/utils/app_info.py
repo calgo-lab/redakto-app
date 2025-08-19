@@ -1,9 +1,9 @@
 from __future__ import annotations
+from pathlib import Path
 from pydantic import BaseModel
 from typing import List, Optional
-import json
-from pathlib import Path
 
+import json
 
 class SupportedModel(BaseModel):
     model_name: str
@@ -29,7 +29,9 @@ class AppInfoData(BaseModel):
     entity_set_models: List[EntitySetModel]
 
 class AppInfo:
-    """Utility for loading and accessing app information and configuration."""
+    """
+    Utility for loading and accessing app information and configuration.
+    """
 
     DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "config/app_info.json"
 
@@ -58,13 +60,19 @@ class AppInfo:
         return self._config.entity_set_models
 
     def get_entity_set(self, entity_set_id: str) -> EntitySetModel | None:
-        """Find an entity set by its ID."""
+        """
+        Find an entity set by its ID.
+        """
         return next((es for es in self._config.entity_set_models if es.entity_set_id == entity_set_id), None)
 
     def to_dict(self) -> dict:
-        """Convert back to dictionary."""
+        """
+        Convert back to dictionary.
+        """
         return self._config.model_dump()
 
     def to_json(self) -> str:
-        """Convert back to JSON string."""
+        """
+        Convert back to JSON string.
+        """
         return self._config.model_dump_json(indent=4)
