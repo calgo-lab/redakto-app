@@ -3,15 +3,18 @@ from pathlib import Path
 from pydantic import BaseModel
 from typing import List, Optional
 
-import json
+import yaml
 
 class SupportedModel(BaseModel):
     model_name: str
     model_id: str
     model_type: str
     model_type_description: str
+    model_loading_strategy: str
     model_directory_name: List[str]
     model_version: str
+    model_impl: str
+    model_system_requirements: List[str]
 
 class EntitySetModel(BaseModel):
     entity_set_id: str
@@ -33,7 +36,7 @@ class AppInfo:
     Utility for loading and accessing app information and configuration.
     """
 
-    DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "config/app_info.json"
+    DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "config/app_info.yml"
 
     def __init__(self, config: AppInfoData):
         self._config = config
@@ -48,8 +51,29 @@ class AppInfo:
         if not path.exists():
             raise FileNotFoundError(f"Config file not found: {path}")
         with path.open(encoding="utf-8") as f:
-            data = json.load(f)
-        return cls(AppInfoData.model_validate(data))
+            data = yaml.safe_load(f)
+        
+        # Parse entity sets and their models with full validation
+        entity_sets = []
+        for es_data in data["entity_set_models"]:
+            models = [SupportedModel.model_validate(model) for model in es_data["supported_models"]]
+            entity_sets.append(EntitySetModel(
+                entity_set_id=es_data["entity_set_id"],
+                corpus_name=es_data["corpus_name"],
+                corpus_doctype=es_data["corpus_doctype"],
+                corpus_description=es_data["corpus_description"],
+                corpus_version=es_data["corpus_version"],
+                corpus_language=es_data["corpus_language"],
+                links=es_data["links"],
+                supported_models_root_dir=es_data["supported_models_root_dir"],
+                supported_models=models
+            ))
+        
+        app_info_data = AppInfoData(
+            app_name=data["app_name"],
+            entity_set_models=entity_sets
+        )
+        return cls(app_info_data)
 
     @property
     def app_name(self) -> str:
@@ -64,15 +88,3 @@ class AppInfo:
         Find an entity set by its ID.
         """
         return next((es for es in self._config.entity_set_models if es.entity_set_id == entity_set_id), None)
-
-    def to_dict(self) -> dict:
-        """
-        Convert back to dictionary.
-        """
-        return self._config.model_dump()
-
-    def to_json(self) -> str:
-        """
-        Convert back to JSON string.
-        """
-        return self._config.model_dump_json(indent=4)

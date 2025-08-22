@@ -3,9 +3,7 @@ from fastapi import FastAPI, HTTPException
 from flair.data import Sentence
 from pandas import DataFrame
 from pydantic import BaseModel
-from somajo import SoMaJo
-from src.infrastructure.frameworks import FlairTaggerLoader, MT5Loader
-from src.infrastructure.model_loading.model_service import ModelService
+from src.infrastructure.services.model_service_impl import ModelServiceImpl
 from typing import Any, Dict, List
 
 import logging
@@ -21,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.model_service = ModelService()
+    app.state.model_service = ModelServiceImpl()
     yield
 
 # Initialize FastAPI app
@@ -125,22 +123,12 @@ def get_pseudonymized_text(input_text: str, predicted_annotation_df: DataFrame) 
         offset += len(row.Pseudonym) - len(row.Token)
     return output_text
 
-
-def _get_somajo_tokenized_sentences(text: str) -> List[Sentence]:
-    tokenizer = SoMaJo("de_CMC", split_camel_case=False)
-    sentences: List[Sentence] = list()
-    for sentence in tokenizer.tokenize_text([text]):
-        sentences.append(Sentence([token.text for token in sentence]))
-    return sentences
-
 def get_annotation_df_with_flair_tagger(input_text: str, tagger_id: str) -> DataFrame:
     tuples = list()
     
     email_content = input_text
-    sentences = _get_somajo_tokenized_sentences(input_text)
-    tagger = app.state.model_service.get_model('codealltag', tagger_id)
-
-    sentences = FlairTaggerLoader.predict(tagger, sentences)
+    model_inference_maker = app.state.model_service.get_model_inference_maker('codealltag', tagger_id)
+    sentences = model_inference_maker.infer(input_text=input_text)
 
     email_content_length = len(email_content)
     email_content_copy = email_content[0:email_content_length]
@@ -190,28 +178,20 @@ def get_annotation_df_with_flair_tagger(input_text: str, tagger_id: str) -> Data
     )
 
 def _process_for_codealltag_mT5(input_data, output):
-    model, tokenizer = app.state.model_service.get_model(input_data.entity_set_id, input_data.model_id)
+    model_inference_maker = app.state.model_service.get_model_inference_maker(input_data.entity_set_id, input_data.model_id)
     for input_text in input_data.input_texts:
         per_text_output: List[DataItem] = list()
-        tokenized_inputs = MT5Loader.tokenize_text(tokenizer, 
-                                                   input_text, 
-                                                   max_length=512, 
-                                                   padding="max_length", 
-                                                   truncation=True)
+        predicted_texts: List[str] = model_inference_maker.infer(input_text=input_text, 
+                                                              max_length=512, 
+                                                              padding="max_length", 
+                                                              truncation=True, 
+                                                              repeat_count=input_data.repeat, 
+                                                              temperature=0.8, 
+                                                              do_sample=True, 
+                                                              top_k=100)
         
-        for repeat_count in range(0, input_data.repeat):
-            predicted_text = MT5Loader.generate(
-                model=model, 
-                tokenizer=tokenizer, 
-                tokenized_inputs=tokenized_inputs, 
-                max_length=512, 
-                temperature=0.8, 
-                do_sample=True, 
-                top_k=100
-            )
-
+        for predicted_text in predicted_texts:
             print(predicted_text)
-            
             output_df = get_annotation_df_with_input_text_and_predicted_text(input_text, predicted_text, labels)
             output_text = get_pseudonymized_text(input_text, output_df)
             data_item = DataItem(output_dict=output_df.to_dict(), output_text=output_text)

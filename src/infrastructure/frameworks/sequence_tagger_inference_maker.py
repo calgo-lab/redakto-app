@@ -31,7 +31,7 @@ class SequenceTaggerInferenceMaker(ModelInferenceMaker):
     
     def _get_somajo_tokenized_flair_sentences(self, text: str) -> List[Sentence]:
         sentences: List[Sentence] = list()
-        for tokenized_sentence in self._somjo_tokenizer.tokenize(text):
+        for tokenized_sentence in self._somajo_tokenizer.tokenize(text):
             sentences.append(Sentence(tokenized_sentence))
         return sentences
     
@@ -41,4 +41,3 @@ class SequenceTaggerInferenceMaker(ModelInferenceMaker):
         """
         if self._somajo_tokenizer is None:
             self._somajo_tokenizer = SoMaJoTokenizer()
-        return self._somajo_tokenizer
