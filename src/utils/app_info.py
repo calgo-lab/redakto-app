@@ -16,6 +16,15 @@ class SupportedModel(BaseModel):
     model_impl: str
     model_system_requirements: List[str]
 
+class FineGrainedLabel(BaseModel):
+    id: str
+    description: str
+
+class EntitySetLabel(BaseModel):
+    id: str
+    description: str
+    fine_grained: List[FineGrainedLabel]
+
 class EntitySetModel(BaseModel):
     entity_set_id: str
     corpus_name: str
@@ -26,6 +35,8 @@ class EntitySetModel(BaseModel):
     links: List[str]
     supported_models_root_dir: List[str]
     supported_models: List[SupportedModel]
+    entity_set_labels: List[EntitySetLabel]
+    sample_texts: List[str]
 
 class AppInfoData(BaseModel):
     app_name: str
@@ -57,6 +68,8 @@ class AppInfo:
         entity_sets = []
         for es_data in data["entity_set_models"]:
             models = [SupportedModel.model_validate(model) for model in es_data["supported_models"]]
+            labels = [EntitySetLabel.model_validate(label_data) for label_data in es_data.get("entity_set_labels", [])]
+            texts = es_data.get("sample_texts", [])
             entity_sets.append(EntitySetModel(
                 entity_set_id=es_data["entity_set_id"],
                 corpus_name=es_data["corpus_name"],
@@ -66,7 +79,9 @@ class AppInfo:
                 corpus_language=es_data["corpus_language"],
                 links=es_data["links"],
                 supported_models_root_dir=es_data["supported_models_root_dir"],
-                supported_models=models
+                supported_models=models,
+                entity_set_labels=labels,
+                sample_texts=texts
             ))
         
         app_info_data = AppInfoData(
